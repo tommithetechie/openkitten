@@ -1,103 +1,116 @@
-# OpenKitten 😼
+# OpenKitten
 
 ![TypeScript](https://img.shields.io/badge/TypeScript-language-3178c6?logo=typescript&logoColor=white)
 ![Bun](https://img.shields.io/badge/Bun-runtime-fbf0df?logo=bun&logoColor=white)
 ![Vitest](https://img.shields.io/badge/Vitest-100%25%20coverage-729b1b?logo=vitest&logoColor=white)
 ![Biome](https://img.shields.io/badge/Biome-linted%20%26%20formatted-60a5fa?logo=biome&logoColor=white)
 
-**Telegram-first** 💬 AI agent with **75+ AI providers** 🤖, **extensible plugins** 🧩, **multiple (sub)agents** 🤝, **composable skills** 🧱, and **controlled permissions** 🔒.
+Discord-first AI coding bot powered by OpenCode.
 
-## Motivation
+## Highlights
 
-OpenClaw is the dominant open-source AI agent, but it has become buggy and almost unusable. With ~500k lines of code, it's overwhelming — hard to tell what's causing issues, what might break next, and what security risks are lurking underneath.
+- Discord bot runtime (no Telegram boot path in the main serve flow)
+- OpenCode-backed model routing
+- Runtime model switch via slash command
+- Automatic long-response chunking for Discord limits
+- Per-reply model signature footer when provider/model metadata is available
 
-NanoClaw took the right approach by going minimal at ~500 lines of code, but it's Claude-only and more of a starting point than a product. You'll need to add a lot yourself before it becomes actually useful.
+## Current Runtime Behavior
 
-### How is OpenKitten different?
+- Listens to all non-bot messages in channels and DMs
+- Ignores bot messages to avoid loops
+- Sends typing indicators while waiting for model output
+- Supports slash command `/model` with:
+  - `Gemini` -> `google/gemini-2.5-flash`
+  - `Phi-4` -> `microsoft/phi-4-reasoning:free`
 
-- **Built for Telegram** — the best chatbot experience on the best messaging platform
-- **Powered by OpenCode** — 75+ AI providers with rich plugin & skill ecosystem
-- **Opinionated by design** — fewer choices, more capability, zero bloat
+## Prerequisites
 
-> [!WARNING]
-> OpenKitten is in early development. Things may break between releases.
+- Bun runtime installed: https://bun.com/docs/installation
+- A Discord bot application and token
+- API key(s) for the model providers you want to use
 
-## Setup
-
-### Prepare
-
-- Install Bun runtime ([Bun installation](https://bun.com/docs/installation))
-- Create a bot with [@BotFather](https://t.me/BotFather)
-- Get your user ID from [@userinfobot](https://t.me/userinfobot)
-
-### Install
+## Install
 
 ```bash
-# Clone OpenKitten
-git clone https://github.com/phuctm97/openkitten.git
+git clone https://github.com/tommithetechie/openkitten.git
 cd openkitten
-
-# Install dependencies
 bun install
 ```
 
-To update and install as a system service:
+## Environment Variables
+
+Set these in your shell or `.env` (do not commit `.env`):
 
 ```bash
-bun . up
+DISCORD_BOT_TOKEN=...
+GEMINI_API_KEY=...
+OPENROUTER_API_KEY=...
 ```
 
-To stop and remove the system service:
+Notes:
+- Gemini auth is passed to OpenCode as `GOOGLE_GENERATIVE_AI_API_KEY`.
+- OpenRouter auth is also passed so `/model` can switch to Phi-4 without restart.
+
+Optional:
 
 ```bash
-bun . down
+OPENKITTEN_PROFILE=default
+OPENKITTEN_LOG_LEVEL=info
 ```
 
-To run directly in the foreground:
+## Run
+
+Foreground run:
 
 ```bash
 bun . serve
 ```
 
-> [!NOTE]
-> The system service may appear as "Jarred Sumner" — this is the name of the Bun creator used to sign the runtime, not malware.
-
-## Configuration
-
-### Log level
-
-Set via `OPENKITTEN_LOG_LEVEL` (defaults to `silly`):
+Typecheck:
 
 ```bash
-OPENKITTEN_LOG_LEVEL=info bun . serve
+bun typecheck
 ```
 
-Levels: `silly`, `trace`, `debug`, `info`, `warn`, `error`, `fatal`.
-
-### Profile
-
-Set via `OPENKITTEN_PROFILE` (defaults to `default`):
+Lint/format check:
 
 ```bash
-OPENKITTEN_PROFILE=work bun . serve
+bun --bun biome check
 ```
 
-Each profile isolates its config & data at `~/.openkitten/profiles/<profile>`.
+Tests:
 
-### Telegram
-
-OpenKitten prompts for your Telegram bot token and user ID if not already configured, then saves them to `~/.openkitten/profiles/<profile>/system/config/openkitten/telegram.json`. To reconfigure, delete the file and restart the server.
-
-### OpenCode
-
-OpenKitten bootstraps an OpenCode config directory per profile at `~/.openkitten/profiles/<profile>/.opencode`:
-
-```
-opencode.json       # OpenCode configuration
-agents/             # OpenCode agents
-├── assist.md       # General purpose agent (default)
-├── build.md        # Software engineering agent
-└── plan.md         # Read-only research & planning agent
+```bash
+bun --bun vitest run
 ```
 
-Edit `opencode.json` to configure providers, models, agents, commands, permissions, MCP servers, and more. See [OpenCode config docs](https://opencode.ai/docs/config) for all available options.
+## How Model Switching Works
+
+- The bot keeps an in-memory active model state (defaults to Gemini).
+- `/model` updates that state at runtime.
+- Before each prompt, OpenKitten updates `.opencode/opencode.json` to the selected model.
+- New prompts use the selected model immediately.
+
+## OpenCode Profile Layout
+
+Per profile, OpenKitten initializes:
+
+```text
+~/.openkitten/profiles/<profile>/.opencode/
+  opencode.json
+  agents/
+    assist.md
+    build.md
+    plan.md
+```
+
+## Security
+
+- Keep `.env` private and untracked.
+- `.env` is ignored by git in this repository.
+- If secrets were ever staged, remove them from git index/history before pushing.
+
+## Project Status
+
+OpenKitten is under active development. Expect rapid iteration and occasional breaking changes.

@@ -13,10 +13,12 @@ import pkg from "~/package.json" with { type: "json" };
 const bin = resolve(import.meta.dirname, "../node_modules/.bin/opencode");
 
 const defaultAgentsDir = resolve(import.meta.dirname, "../agents");
+const defaultModelName = "google/gemini-2.5-flash";
 
 const defaultConfigJson = {
   $schema: "https://opencode.ai/config.json",
   default_agent: "assist",
+  model: defaultModelName,
 };
 
 function cancel(): never {
@@ -69,6 +71,20 @@ export namespace OpencodeConfig {
       .map((r) => r.reason);
     if (errors.length === 1) throw errors[0];
     if (errors.length > 1) throw new Errors(...errors);
+
+    // Enforce default Gemini model for existing configs as well.
+    const opencodeConfigPath = join(configDir, "opencode.json");
+    const opencodeConfigJson = JSON.parse(
+      await readFile(opencodeConfigPath, "utf-8"),
+    ) as Record<string, unknown>;
+    if (opencodeConfigJson["model"] !== defaultModelName) {
+      opencodeConfigJson["model"] = defaultModelName;
+      await writeFile(
+        opencodeConfigPath,
+        JSON.stringify(opencodeConfigJson, null, 2),
+      );
+    }
+
     const username = pkg.name;
     const password = randomBytes(32).toString("base64url");
     const config: OpencodeConfig = {
@@ -98,6 +114,8 @@ export namespace OpencodeConfig {
         OPENCODE_DISABLE_TERMINAL_TITLE: "true",
         OPENCODE_ENABLE_EXA: "true",
         OPENCODE_ENABLE_EXPERIMENTAL_MODELS: "true",
+        GOOGLE_GENERATIVE_AI_API_KEY: Bun.env["GEMINI_API_KEY"],
+        OPENROUTER_API_KEY: Bun.env["OPENROUTER_API_KEY"],
       },
       authorization: `Basic ${btoa(`${username}:${password}`)}`,
     };

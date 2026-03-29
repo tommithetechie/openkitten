@@ -5,16 +5,22 @@ import type {
   TextPart,
 } from "@opencode-ai/sdk/v2";
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
+import type { Client } from "discord.js";
 import { eq } from "drizzle-orm";
 import type { Bot } from "grammy";
 import type { Database } from "~/lib/database";
+import { discordSendText } from "~/lib/discord-send-text";
+import type { Dismay } from "~/lib/dismay";
 import { Errors } from "~/lib/errors";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import { grammySendText } from "~/lib/grammy-send-text";
+import { logger } from "~/lib/logger";
 import * as schema from "~/lib/schema";
 
 export class ProcessingMessages {
   readonly #bot: Bot;
+  readonly #discordClient: Client | undefined;
+  readonly #dismay: Dismay | undefined;
   readonly #database: Database;
   readonly #opencodeClient: OpencodeClient;
   readonly #existingSessions: ExistingSessions;
@@ -24,8 +30,12 @@ export class ProcessingMessages {
     database: Database,
     opencodeClient: OpencodeClient,
     existingSessions: ExistingSessions,
+    discordClient?: Client | null,
+    dismay?: Dismay | null,
   ) {
     this.#bot = bot;
+    this.#discordClient = discordClient ?? undefined;
+    this.#dismay = dismay ?? undefined;
     this.#database = database;
     this.#opencodeClient = opencodeClient;
     this.#existingSessions = existingSessions;
@@ -66,6 +76,32 @@ export class ProcessingMessages {
     const { chatId, threadId } = this.#existingSessions.get(message.sessionID, {
       throwIfNotFound: true,
     });
+
+    // Try Discord first if available and discord client exists
+    if (this.#discordClient && this.#dismay && threadId) {
+      try {
+        // threadId is stored as a number in the database, convert it to string for Discord API
+        const channelId = String(threadId);
+        const userId = String(chatId);
+        const channel = await this.#discordClient.channels.fetch(channelId);
+        if (channel && "send" in channel) {
+          const msg = await channel.send(`<@${userId}>`);
+          await discordSendText(msg, text);
+          return;
+        }
+      } catch (error) {
+        logger.debug(
+          "Failed to send to Discord, falling back to Telegram",
+          error,
+          {
+            channelId: threadId,
+            userId: chatId,
+          },
+        );
+      }
+    }
+
+    // Fall back to Telegram
     await grammySendText({ bot: this.#bot, text, chatId, threadId });
   }
 
@@ -137,12 +173,16 @@ export class ProcessingMessages {
     database: Database,
     opencodeClient: OpencodeClient,
     existingSessions: ExistingSessions,
+    discordClient?: Client | null,
+    dismay?: Dismay | null,
   ): ProcessingMessages {
     return new ProcessingMessages(
       bot,
       database,
       opencodeClient,
       existingSessions,
+      discordClient,
+      dismay,
     );
   }
 }
